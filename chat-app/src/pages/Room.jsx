@@ -1,22 +1,42 @@
 import { useState, useEffect } from "react";
 import { ID, Query } from "appwrite";
 
-import {
+import client, {
   databases,
   DATABASE_ID,
   COLLECTION_ID_MESSAGES,
 } from "../appWriteConfig";
 
-import imgSrc from "../assets/loading.gif";
-import { Trash2 , Loader } from "react-feather";
+import { Trash2, Loader } from "react-feather";
 
 const Room = () => {
+  const CREATE = "databases.*.collections.*.documents.*.create";
+  const DELETE = "databases.*.collections.*.documents.*.delete";
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsloading] = useState(true);
   const [messageBody, setMessageBody] = useState("");
 
   useEffect(() => {
     getMessages();
+
+    const unsubscribe = client.subscribe(
+      `databases.${DATABASE_ID}.collections.${COLLECTION_ID_MESSAGES}.documents`,
+      (response) => {
+        if (response.events.includes(CREATE)) {
+          console.log("A Message was created!!");
+          setMessages((prevState) => [response.payload, ...prevState]);
+        } else if (response.events.includes(DELETE)) {
+          console.log("A Message was deleted!!");
+          setMessages((prevState) =>
+            prevState.filter((message) => message.$id !== response.payload.$id)
+          );
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e) => {
@@ -33,7 +53,7 @@ const Room = () => {
       payload
     );
 
-    setMessages((prevState) => [response, ...messages]);
+    //setMessages((prevState) => [response, ...messages]);
     setMessageBody("");
   };
 
@@ -49,16 +69,11 @@ const Room = () => {
   };
 
   const deleteMessage = async (message_Id) => {
-    setIsloading(true);
     await databases.deleteDocument(
       DATABASE_ID,
       COLLECTION_ID_MESSAGES,
       message_Id
     );
-    setMessages((prevState) =>
-      messages.filter((message) => message.$id !== message_Id)
-    );
-    setIsloading(false);
   };
 
   return (
@@ -90,7 +105,7 @@ const Room = () => {
                     {new Date(message.$createdAt).toLocaleString()}
                   </small>
                   <Trash2
-                  className="delete--btn"
+                    className="delete--btn"
                     onClick={() => {
                       deleteMessage(message.$id);
                     }}
@@ -103,7 +118,9 @@ const Room = () => {
             ))}
           </div>
         ) : (
-          <center><Loader /></center>
+          <center>
+            <Loader />
+          </center>
         )}
       </div>
     </main>
